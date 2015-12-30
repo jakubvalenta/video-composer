@@ -3,18 +3,26 @@ import math
 import os
 import sys
 
+import listio
 from moviepy.editor import *
 from moviepy.video.tools.subtitles import SubtitlesClip
-import listio
 
 
 DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
 
 DEFAULT_FPS = 24
-DEFAULT_EXT = '.avi'
+DEFAULT_EXT = '.mp4'
 DEFAULT_CODEC = {
     '.avi': 'png',
+}
+DEFAULT_FFMPEG_PARAMS = {
+    '.mp4': [
+        '-preset', 'slow',
+        # '-profile:v', 'baseline',
+        '-crf', '23',
+        # '-pix_fmt', 'yuv420p'
+    ],
 }
 DEFAULT_CLIP_DIR = 'clips'
 
@@ -26,18 +34,23 @@ DEFAULT_INTERTITLE_POSITION = 'center'
 DEFAULT_INTERTITLE_DURATION = 3
 
 
-def render(clip, file_path, fps=None, ext=None, codec=None):
+def render(clip, file_path, fps=None, ext=None, codec=None,
+           ffmpeg_params=None):
     if fps is None:
         fps = DEFAULT_FPS
     if ext is None:
         ext = DEFAULT_EXT
-    dir, _ = os.path.split(file_path)
-    if dir and not os.path.isdir(dir):
-        os.makedirs(dir)
-    base, _ = os.path.splitext(file_path)
+    file_dir, _ = os.path.split(file_path)
+    if file_dir and not os.path.isdir(file_dir):
+        os.makedirs(file_dir)
+    file_base, _ = os.path.splitext(file_path)
     if codec is None and ext in DEFAULT_CODEC:
         codec = DEFAULT_CODEC[ext]
-    clip.write_videofile(base + ext, fps=fps, codec=codec)
+    if ffmpeg_params is None and ext in DEFAULT_FFMPEG_PARAMS:
+        ffmpeg_params = DEFAULT_FFMPEG_PARAMS[ext]
+    file_path = file_base + ext
+    clip.write_videofile(file_path, fps=fps,
+                         codec=codec, ffmpeg_params=ffmpeg_params)
 
 
 def generate_text_clip(text, color=None, font=None, fontsize=None):
@@ -62,16 +75,64 @@ def format_duration(duration):
     return duration.replace(':', '_').replace('.', '_')
 
 
-def format_clip_file_path(file_path, dir_name, cut_start, cut_end):
+def format_clip_file_path(file_path, dir_name, cut_start, cut_end, params=[]):
     file_dir, file_basename = os.path.split(file_path)
     file_name, file_ext = os.path.splitext(file_basename)
     new_path_without_ext = os.path.join(file_dir, dir_name, file_name)
-    return '{path}-{start}-{end}{ext}'.format(
+    if params:
+        params.insert(0, '')
+        params_str = '+'.join(params)
+    return '{path}-{start}-{end}{params}{ext}'.format(
         path=new_path_without_ext,
         start=format_duration(cut_start),
         end=format_duration(cut_end),
+        params=params_str,
         ext=file_ext
     )
+
+
+def filter_resize(video_clip, width, height):
+    current_width = video_clip.w
+    current_height = video_clip.h
+    current_aspect_ratio = current_width / current_height
+    new_aspect_ratio = width / height
+
+    if current_width == width and current_height == height:
+        print('  RESIZING not necessary')
+        return video_clip
+
+    clip_x = 0
+    clip_y = 0
+    if new_aspect_ratio > current_aspect_ratio:
+        new_width = width
+        new_height = round(new_width / current_aspect_ratio)
+        clip_y = (new_height - height) / 2
+    elif new_aspect_ratio < current_aspect_ratio:
+        new_height = height
+        new_width = round(new_height * current_aspect_ratio)
+        clip_x = (new_width - width) / 2
+    else:
+        new_width = width
+        new_height = height
+
+    print('  RESIZING from {cw} x {ch} [{ca}] to {nw} x {nh} [{na}] '.format(
+        cw=current_width,
+        ch=current_height,
+        ca=current_aspect_ratio,
+        nw=new_width,
+        nh=new_height,
+        na=new_aspect_ratio
+    ))
+    video_clip = video_clip.resize((new_width, new_height))
+
+    if clip_x > 0 or clip_y > 0:
+        print('  CLIPPING frame position +{x}+{y}'.format(x=clip_x, y=clip_y))
+        video_clip = video_clip.crop(
+            x1=clip_x, y1=clip_y,
+            width=new_width, height=new_height
+        )
+
+    return video_clip
 
 
 def filter_add_subtitles(video_clip, subtitles_path):
@@ -95,7 +156,10 @@ def filter_add_intertitle(video_clip, text, color, font, fontsize, position,
         (width, height)
     )
     intertitle_clip = composite_clip.subclip(0, duration)
-    return concatenate_videoclips([intertitle_clip, video_clip])
+    return concatenate_videoclips(
+        [intertitle_clip, video_clip],
+        method='compose'
+    )
 
 
 def filter_adjust_speed(video_clip, factor):
@@ -203,8 +267,11 @@ def main():
             print('  SKIP file not found')
             continue
         if not args.join:
+            params = []
+            if args.intertitles:
+                params.append('i')
             clip_file_path = format_clip_file_path(
-                file_path, args.outputfile, cut_start, cut_end
+                file_path, args.outputfile, cut_start, cut_end, params
             )
             if os.path.isfile(clip_file_path):
                 print('  SKIP clip exists')
@@ -217,12 +284,14 @@ def main():
         video_sub_clip = video_clip.subclip(cut_start, cut_end)
         if args.change_fps:
             video_sub_clip = video_sub_clip.set_fps(args.change_fps)
-        if args.resize_width and args.resize_height:
-            video_sub_clip = video_sub_clip.resize(
-                width=args.resize_width, height=args.resize_height
-            )
 
         composite_clip = video_sub_clip
+        if args.resize_width and args.resize_height:
+            composite_clip = filter_resize(
+                composite_clip,
+                args.resize_width,
+                args.resize_height
+            )
         if args.subtitles:
             composite_clip = filter_add_subtitles(
                 composite_clip,
