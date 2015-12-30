@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+
+import video_composer.video_composer
+if __name__ == '__main__':
+    video_composer.video_composer.main()
