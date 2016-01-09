@@ -13,14 +13,6 @@ DEFAULT_LIMIT = -1
 
 DEFAULT_FPS = 24
 DEFAULT_EXT = '.mp4'
-DEFAULT_FFMPEG_PARAMS = {
-    '.mp4': [
-        '-preset', 'slow',
-        # '-profile:v', 'baseline',
-        '-crf', '23',
-        # '-pix_fmt', 'yuv420p'
-    ],
-}
 DEFAULT_CLIP_DIR = 'clips'
 
 DEFAULT_TEXT_COLOR = 'white'
@@ -40,12 +32,12 @@ def render(clip, file_path, fps=None, ext=None, codec=None,
     file_dir, _ = os.path.split(file_path)
     if file_dir and not os.path.isdir(file_dir):
         os.makedirs(file_dir)
+    if ffmpeg_params:
+        ffmpeg_params = ffmpeg_params.split(' ')
     file_base, _ = os.path.splitext(file_path)
-    if ffmpeg_params is None and ext in DEFAULT_FFMPEG_PARAMS:
-        ffmpeg_params = DEFAULT_FFMPEG_PARAMS[ext]
     file_path = file_base + ext
-    clip.write_videofile(file_path, fps=fps,
-                         codec=codec, ffmpeg_params=ffmpeg_params)
+    clip.write_videofile(file_path, fps=fps, codec=codec,
+                         ffmpeg_params=ffmpeg_params)
 
 
 def generate_text_clip(text, color=None, font=None, fontsize=None):
@@ -187,6 +179,9 @@ def main():
     parser.add_argument('--video-codec', '-vc', dest='video_codec',
                         help='video codec, defaults to not set, which means'
                         ' that moviepy will chose the codec automatically')
+    parser.add_argument('--video-params', '-vp', dest='video_params',
+                        help='additional parameters for FFmpeg,'
+                        ' example: --video-params="-vf eq=gamma=1.5"')
     parser.add_argument('--resize-width', '-rw', dest='resize_width',
                         type=int,
                         help='resize width; you must set both --resize-width'
@@ -328,12 +323,14 @@ def main():
             all_clips.append(composite_clip)
         else:
             render(composite_clip, clip_file_path, fps=args.video_fps,
-                   ext=args.video_ext, codec=args.video_codec)
+                   ext=args.video_ext, codec=args.video_codec,
+                   ffmpeg_params=args.video_params)
 
     if args.join:
         joined_clip = concatenate_videoclips(all_clips)
         render(joined_clip, args.outputdir, fps=args.video_fps,
-               ext=args.video_ext, codec=args.video_codec)
+               ext=args.video_ext, codec=args.video_codec,
+               ffmpeg_params=args.video_params)
 
     sys.exit()
 
