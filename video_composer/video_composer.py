@@ -13,9 +13,6 @@ DEFAULT_LIMIT = -1
 
 DEFAULT_FPS = 24
 DEFAULT_EXT = '.mp4'
-DEFAULT_CODEC = {
-    '.avi': 'png',
-}
 DEFAULT_FFMPEG_PARAMS = {
     '.mp4': [
         '-preset', 'slow',
@@ -44,8 +41,6 @@ def render(clip, file_path, fps=None, ext=None, codec=None,
     if file_dir and not os.path.isdir(file_dir):
         os.makedirs(file_dir)
     file_base, _ = os.path.splitext(file_path)
-    if codec is None and ext in DEFAULT_CODEC:
-        codec = DEFAULT_CODEC[ext]
     if ffmpeg_params is None and ext in DEFAULT_FFMPEG_PARAMS:
         ffmpeg_params = DEFAULT_FFMPEG_PARAMS[ext]
     file_path = file_base + ext
@@ -177,15 +172,21 @@ def main():
                         ' cut the clips')
     parser.add_argument('--clips', '-c', dest='clipsdir', required=True,
                         help='clips video files location')
-    parser.add_argument('--output', '-o', dest='outputfile', required=True,
+    parser.add_argument('--output', '-o', dest='outputdir', required=True,
                         help='directory name inside --clips directory in which'
                         ' the cut clips will be rendered, or path to a single'
                         ' output video file if --join is set')
     parser.add_argument('--join', '-j', dest='join', action='store_true',
                         help='concat cut video clips')
-    parser.add_argument('--change-fps', '-f', dest='change_fps', type=int,
-                        default=DEFAULT_FPS,
-                        help='video fps')
+    parser.add_argument('--video-fps', '-vf', dest='video_fps', type=int,
+                        help='video fps, defaults to {}'
+                        .format(DEFAULT_FPS))
+    parser.add_argument('--video-ext', '-ve', dest='video_ext',
+                        help='video file extension, defaults to {}'
+                        .format(DEFAULT_EXT))
+    parser.add_argument('--video-codec', '-vc', dest='video_codec',
+                        help='video codec, defaults to not set, which means'
+                        ' that moviepy will chose the codec automatically')
     parser.add_argument('--resize-width', '-rw', dest='resize_width',
                         type=int,
                         help='resize width; you must set both --resize-width'
@@ -271,7 +272,7 @@ def main():
             if args.intertitles:
                 params.append('i')
             clip_file_path = format_clip_file_path(
-                file_path, args.outputfile, cut_start, cut_end, params
+                file_path, args.outputdir, cut_start, cut_end, params
             )
             if os.path.isfile(clip_file_path):
                 print('  SKIP clip exists')
@@ -282,8 +283,8 @@ def main():
         video_clip = cache_video_clips[file_path]
 
         video_sub_clip = video_clip.subclip(cut_start, cut_end)
-        if args.change_fps:
-            video_sub_clip = video_sub_clip.set_fps(args.change_fps)
+        if args.video_fps:
+            video_sub_clip = video_sub_clip.set_fps(args.video_fps)
 
         composite_clip = video_sub_clip
         if args.resize_width and args.resize_height:
@@ -326,11 +327,13 @@ def main():
         if args.join:
             all_clips.append(composite_clip)
         else:
-            render(composite_clip, clip_file_path, fps=args.change_fps)
+            render(composite_clip, clip_file_path, fps=args.video_fps,
+                   ext=args.video_ext, codec=args.video_codec)
 
     if args.join:
         joined_clip = concatenate_videoclips(all_clips)
-        render(joined_clip, args.outputfile, fps=args.change_fps)
+        render(joined_clip, args.outputdir, fps=args.video_fps,
+               ext=args.video_ext, codec=args.video_codec)
 
     sys.exit()
 
