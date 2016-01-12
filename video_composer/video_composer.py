@@ -62,9 +62,12 @@ def format_duration(duration):
     return duration.replace(':', '_').replace('.', '_')
 
 
-def format_clip_file_path(file_path, dir_name, cut_start, cut_end, params=[]):
+def format_clip_file_path(file_path, dir_name, cut_start, cut_end,
+                          ext=None, params=[]):
+    if ext is None:
+        ext = DEFAULT_EXT
     file_dir, file_basename = os.path.split(file_path)
-    file_name, file_ext = os.path.splitext(file_basename)
+    file_name, _ = os.path.splitext(file_basename)
     new_path_without_ext = os.path.join(file_dir, dir_name, file_name)
     if params:
         params.insert(0, '')
@@ -74,7 +77,7 @@ def format_clip_file_path(file_path, dir_name, cut_start, cut_end, params=[]):
         start=format_duration(cut_start),
         end=format_duration(cut_end),
         params=params_str,
-        ext=file_ext
+        ext=ext
     )
 
 
@@ -267,10 +270,12 @@ def main():
             if args.intertitles:
                 params.append('i')
             clip_file_path = format_clip_file_path(
-                file_path, args.outputdir, cut_start, cut_end, params
+                file_path, args.outputdir, cut_start, cut_end,
+                ext=args.video_ext, params=params
             )
+            print('  OUTPUT "{}"'.format(clip_file_path))
             if os.path.isfile(clip_file_path):
-                print('  SKIP clip exists')
+                print('  SKIP output exists "{}"'.format(clip_file_path))
                 continue
 
         if file_path not in cache_video_clips:
