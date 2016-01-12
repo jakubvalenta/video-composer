@@ -117,7 +117,7 @@ def filter_resize(video_clip, width, height):
         print('  CLIPPING frame position +{x}+{y}'.format(x=clip_x, y=clip_y))
         video_clip = video_clip.crop(
             x1=clip_x, y1=clip_y,
-            width=new_width, height=new_height
+            width=width, height=height
         )
 
     return video_clip
