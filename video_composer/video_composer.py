@@ -20,6 +20,8 @@ DEFAULT_INTERTITLE_FONTSIZE = 48
 DEFAULT_INTERTITLE_POSITION = 'center'
 DEFAULT_INTERTITLE_DURATION = 3
 
+TEXT_WIDTH_FACTOR = 0.8
+
 
 def render(clip, file_path, fps=None, ext=None, codec=None,
            ffmpeg_params=None):
@@ -38,14 +40,17 @@ def render(clip, file_path, fps=None, ext=None, codec=None,
                          ffmpeg_params=ffmpeg_params)
 
 
-def generate_text_clip(text, color=None, font=None, fontsize=None):
+def generate_text_clip(text, width, color=None, font=None, fontsize=None):
     if color is None:
         color = DEFAULT_TEXT_COLOR
     if font is None:
         font = DEFAULT_TEXT_FONT
     if fontsize is None:
         fontsize = DEFAULT_TEXT_FONTSIZE
-    return TextClip(text, color=color, font=font, fontsize=fontsize)
+    text_with_line_breaks = text.replace('|', '\n')
+    return TextClip(text_with_line_breaks, size=(width, None),
+                    color=color, font=font, fontsize=fontsize,
+                    method='caption', align='center')
 
 
 def subtitle_generator(txt):
@@ -126,7 +131,7 @@ def filter_resize(video_clip, width, height):
 def filter_add_subtitles(video_clip, subtitles_path):
     subtitles_clip = SubtitlesClip(
         subtitles_path,
-        generate_text_clip
+        subtitle_generator
     )
     return CompositeVideoClip([video_clip, subtitles_clip])
 
@@ -134,10 +139,8 @@ def filter_add_subtitles(video_clip, subtitles_path):
 def filter_add_intertitle(video_clip, text, color, font, fontsize, position,
                           duration, width, height):
     text_clip = generate_text_clip(
-        text,
-        color,
-        font,
-        fontsize
+        text, width * TEXT_WIDTH_FACTOR,
+        color=color, font=font, fontsize=fontsize
     )
     composite_clip = CompositeVideoClip(
         [text_clip.set_pos(position)],
@@ -148,6 +151,10 @@ def filter_add_intertitle(video_clip, text, color, font, fontsize, position,
         [intertitle_clip, video_clip],
         method='compose'
     )
+
+
+def filter_fadeout(video_clip, duration):
+    return video_clip.fadeout(duration/1000)
 
 
 def filter_adjust_speed(video_clip, factor):
@@ -214,7 +221,7 @@ def main():
                         help='itertitle font; default \'{}\''
                         .format(DEFAULT_TEXT_FONT))
     parser.add_argument('--intertitle-fontsize', '-is',
-                        dest='intertitle_fontsize',
+                        dest='intertitle_fontsize', type=int,
                         default=DEFAULT_INTERTITLE_FONTSIZE,
                         help='itertitle font size in px; default \'{}\''
                         .format(DEFAULT_INTERTITLE_FONTSIZE))
@@ -224,10 +231,13 @@ def main():
                         help='itertitle position; default \'{}\''
                         .format(DEFAULT_INTERTITLE_POSITION))
     parser.add_argument('--intertitle-duration', '-id',
-                        dest='intertitle_duration',
+                        dest='intertitle_duration', type=int,
                         default=DEFAULT_INTERTITLE_DURATION,
                         help='itertitle duration in seconds; default \'{}\''
                         .format(DEFAULT_INTERTITLE_DURATION))
+    parser.add_argument('--fadeout', '-fd', dest='fadeout', type=int,
+                        help='duration in milliseconds of a fadeout after each'
+                        ' clip; defaults to 0 meaning no fadeout')
     args = parser.parse_args()
 
     composition = listio.read_map(args.inputfile)
@@ -320,6 +330,11 @@ def main():
             composite_clip = filter_adjust_speed(
                 composite_clip,
                 args.speed
+            )
+        if args.fadeout:
+            composite_clip = filter_fadeout(
+                composite_clip,
+                args.fadeout
             )
 
         if args.join:
