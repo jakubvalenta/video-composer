@@ -73,8 +73,9 @@ def format_clip_file_path(file_path, dir_name, cut_start, cut_end,
     file_name, _ = os.path.splitext(file_basename)
     new_path_without_ext = os.path.join(file_dir, dir_name, file_name)
     if params:
-        params.insert(0, '')
-        params_str = '+'.join(params)
+        params_str = '+'.join([''] + params)
+    else:
+        params_str = ''
     return '{path}-{start}-{end}{params}{ext}'.format(
         path=new_path_without_ext,
         start=format_duration(cut_start),
