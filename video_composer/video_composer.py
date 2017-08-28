@@ -291,7 +291,10 @@ def main():
             cache_video_clips[file_path] = VideoFileClip(file_path)
         video_clip = cache_video_clips[file_path]
 
-        video_sub_clip = video_clip.subclip(cut_start, cut_end)
+        if cut_start and cut_end:
+            video_sub_clip = video_clip.subclip(cut_start, cut_end)
+        else:
+            video_sub_clip = video_clip
         if args.video_fps:
             video_sub_clip = video_sub_clip.set_fps(args.video_fps)
 
