@@ -274,21 +274,13 @@ def main():
             break
 
         file_path = os.path.join(args.clipsdir, composition[0])
+        print('CLIP {} "{}"'.format(i, file_path))
         cut_start = parse_duration(composition[1])
         cut_end = parse_duration(composition[2])
         if not composition[1] or not composition[2]:
             print('  SKIP no cut defined')
             continue
-        print(
-            'CLIP {}\n'
-            '  {}\n'
-            '  {} --> {}'
-            .format(
-                i,
-                file_path,
-                cut_start,
-                cut_end
-            ))
+        print('  CUT {} --> {}'.format(cut_start, cut_end))
 
         if composition[0] in DEBUG_SKIP:
             print('  SKIP clip found in DEBUG_SKIP list')
