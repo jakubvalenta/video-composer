@@ -2,9 +2,9 @@ import os
 import sys
 
 import listio
-from moviepy.editor import *
+from moviepy.editor import (CompositeVideoClip, TextClip, VideoFileClip,
+                            concatenate_videoclips)
 from moviepy.video.tools.subtitles import SubtitlesClip
-
 
 DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
@@ -23,8 +23,13 @@ DEFAULT_INTERTITLE_DURATION = 3
 TEXT_WIDTH_FACTOR = 0.8
 
 
-def render(clip, file_path, fps=None, ext=None, codec=None,
-           ffmpeg_params=None):
+def render(
+        clip,
+        file_path,
+        fps=None,
+        ext=None,
+        codec=None,
+        ffmpeg_params=None):
     if fps is None:
         fps = DEFAULT_FPS
     if ext is None:
@@ -36,21 +41,28 @@ def render(clip, file_path, fps=None, ext=None, codec=None,
         ffmpeg_params = ffmpeg_params.split(' ')
     file_base, _ = os.path.splitext(file_path)
     file_path = file_base + ext
-    clip.write_videofile(file_path, fps=fps, codec=codec,
-                         ffmpeg_params=ffmpeg_params)
+    clip.write_videofile(
+        file_path,
+        fps=fps,
+        codec=codec,
+        ffmpeg_params=ffmpeg_params)
 
 
-def generate_text_clip(text, width, color=None, font=None, fontsize=None):
-    if color is None:
-        color = DEFAULT_TEXT_COLOR
-    if font is None:
-        font = DEFAULT_TEXT_FONT
-    if fontsize is None:
-        fontsize = DEFAULT_TEXT_FONTSIZE
+def generate_text_clip(
+        text,
+        width,
+        color=DEFAULT_TEXT_COLOR,
+        font=DEFAULT_TEXT_FONT,
+        fontsize=DEFAULT_SUBTITLE_FONTSIZE):
     text_with_line_breaks = text.replace('|', '\n')
-    return TextClip(text_with_line_breaks, size=(width, None),
-                    color=color, font=font, fontsize=fontsize,
-                    method='caption', align='center')
+    return TextClip(
+        text_with_line_breaks,
+        size=(width, None),
+        color=color,
+        font=font,
+        fontsize=fontsize,
+        method='caption',
+        align='center')
 
 
 def subtitle_generator(txt):
@@ -65,8 +77,13 @@ def format_duration(duration):
     return duration.replace(':', '_').replace('.', '_')
 
 
-def format_clip_file_path(file_path, dir_name, cut_start, cut_end,
-                          ext=None, params=[]):
+def format_clip_file_path(
+        file_path,
+        dir_name,
+        cut_start,
+        cut_end,
+        ext=None,
+        params=None):
     if ext is None:
         ext = DEFAULT_EXT
     file_dir, file_basename = os.path.split(file_path)
@@ -76,13 +93,12 @@ def format_clip_file_path(file_path, dir_name, cut_start, cut_end,
         params_str = '+'.join([''] + params)
     else:
         params_str = ''
-    return '{path}-{start}-{end}{params}{ext}'.format(
+    return '{path}-{start}-{end}{params_str}{ext}'.format(
         path=new_path_without_ext,
         start=format_duration(cut_start),
         end=format_duration(cut_end),
-        params=params_str,
-        ext=ext
-    )
+        params_str=params_str,
+        ext=ext)
 
 
 def filter_resize(video_clip, width, height):
@@ -115,16 +131,16 @@ def filter_resize(video_clip, width, height):
         ca=current_aspect_ratio,
         nw=new_width,
         nh=new_height,
-        na=new_aspect_ratio
-    ))
+        na=new_aspect_ratio))
     video_clip = video_clip.resize((new_width, new_height))
 
     if clip_x > 0 or clip_y > 0:
         print('  CLIPPING frame position +{x}+{y}'.format(x=clip_x, y=clip_y))
         video_clip = video_clip.crop(
-            x1=clip_x, y1=clip_y,
-            width=width, height=height
-        )
+            x1=clip_x,
+            y1=clip_y,
+            width=width,
+            height=height)
 
     return video_clip
 
@@ -132,26 +148,30 @@ def filter_resize(video_clip, width, height):
 def filter_add_subtitles(video_clip, subtitles_path):
     subtitles_clip = SubtitlesClip(
         subtitles_path,
-        subtitle_generator
-    )
+        subtitle_generator)
     return CompositeVideoClip([video_clip, subtitles_clip])
 
 
-def filter_add_intertitle(video_clip, text, color, font, fontsize, position,
-                          duration, width, height):
+def filter_add_intertitle(
+        video_clip,
+        text,
+        color,
+        font,
+        fontsize,
+        position,
+        duration,
+        width,
+        height):
     text_clip = generate_text_clip(
         text, width * TEXT_WIDTH_FACTOR,
-        color=color, font=font, fontsize=fontsize
-    )
+        color=color, font=font, fontsize=fontsize)
     composite_clip = CompositeVideoClip(
         [text_clip.set_pos(position)],
-        (width, height)
-    )
+        (width, height))
     intertitle_clip = composite_clip.subclip(0, duration)
     return concatenate_videoclips(
         [intertitle_clip, video_clip],
-        method='compose'
-    )
+        method='compose')
 
 
 def filter_fadeout(video_clip, duration):
@@ -265,8 +285,7 @@ def main():
                 file_path,
                 cut_start,
                 cut_end
-            )
-        )
+            ))
 
         if composition[0] in DEBUG_SKIP:
             print('  SKIP clip found in DEBUG_SKIP list')
@@ -279,9 +298,12 @@ def main():
             if args.intertitles:
                 params.append('i')
             clip_file_path = format_clip_file_path(
-                file_path, args.outputdir, cut_start, cut_end,
-                ext=args.video_ext, params=params
-            )
+                file_path,
+                args.outputdir,
+                cut_start,
+                cut_end,
+                ext=args.video_ext,
+                params=params)
             print('  OUTPUT "{}"'.format(clip_file_path))
             if os.path.isfile(clip_file_path):
                 print('  SKIP output exists "{}"'.format(clip_file_path))
@@ -303,13 +325,13 @@ def main():
             composite_clip = filter_resize(
                 composite_clip,
                 args.resize_width,
-                args.resize_height
-            )
+                args.resize_height)
         if args.subtitles:
-            composite_clip = filter_add_subtitles(
-                composite_clip,
-                subtitles_path
-            )
+            raise NotImplementedError
+            # TODO: Figure out what subtitles path should be.
+            # composite_clip = filter_add_subtitles(
+            #     composite_clip,
+            #     subtitles_path)
         if args.intertitles:
             text = composition[3]
             print('  INTERTITLE {}'.format(text))
@@ -328,31 +350,36 @@ def main():
                 args.intertitle_position,
                 args.intertitle_duration,
                 intertitle_size_w,
-                intertitle_size_h
-            )
+                intertitle_size_h)
         if args.speed:
             composite_clip = filter_adjust_speed(
                 composite_clip,
-                args.speed
-            )
+                args.speed)
         if args.fadeout:
             composite_clip = filter_fadeout(
                 composite_clip,
-                args.fadeout
-            )
+                args.fadeout)
 
         if args.join:
             all_clips.append(composite_clip)
         else:
-            render(composite_clip, clip_file_path, fps=args.video_fps,
-                   ext=args.video_ext, codec=args.video_codec,
-                   ffmpeg_params=args.video_params)
+            render(
+                composite_clip,
+                clip_file_path,
+                fps=args.video_fps,
+                ext=args.video_ext,
+                codec=args.video_codec,
+                ffmpeg_params=args.video_params)
 
     if args.join:
         joined_clip = concatenate_videoclips(all_clips)
-        render(joined_clip, args.outputdir, fps=args.video_fps,
-               ext=args.video_ext, codec=args.video_codec,
-               ffmpeg_params=args.video_params)
+        render(
+            joined_clip,
+            args.outputdir,
+            fps=args.video_fps,
+            ext=args.video_ext,
+            codec=args.video_codec,
+            ffmpeg_params=args.video_params)
 
     sys.exit()
 
