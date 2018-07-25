@@ -276,6 +276,9 @@ def main():
         file_path = os.path.join(args.clipsdir, composition[0])
         cut_start = parse_duration(composition[1])
         cut_end = parse_duration(composition[2])
+        if not composition[1] or not composition[2]:
+            print('  SKIP no cut defined')
+            continue
         print(
             'CLIP {}\n'
             '  {}\n'
