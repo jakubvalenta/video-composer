@@ -21,6 +21,8 @@ DEFAULT_INTERTITLE_FONTSIZE = 48
 DEFAULT_INTERTITLE_POSITION = 'center'
 DEFAULT_INTERTITLE_DURATION = 3
 
+DEFAULT_CSV_DELIMITER = ','
+
 TEXT_WIDTH_FACTOR = 0.8
 
 logger = logging.getLogger(__name__)
@@ -265,7 +267,6 @@ def main():
                         default=DEFAULT_CSV_DELIMITER)
     args = parser.parse_args()
 
-    composition = listio.read_map(args.inputfile)
     if args.video_params:
         ffmpeg_params = args.video_params.split(' ')
     else:
@@ -276,6 +277,7 @@ def main():
         'ffmpeg_params': args.video_params,
     }
 
+    composition = listio.read_map(args.inputfile, delimiter=args.csv_delimiter)
     if not composition:
         print('Exiting, no composition information found')
         sys.exit(1)
