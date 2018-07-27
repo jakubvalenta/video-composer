@@ -41,11 +41,16 @@ def render(
         ffmpeg_params = ffmpeg_params.split(' ')
     file_base, _ = os.path.splitext(file_path)
     file_path = file_base + ext
+    if os.path.isfile(file_path):
+        print('Aborting rendering, output file exists "{}"'.format(file_path))
+        return False
+    print('  Rendering "{}"'.format(file_path))
     clip.write_videofile(
         file_path,
         fps=fps,
         codec=codec,
         ffmpeg_params=ffmpeg_params)
+    return True
 
 
 def generate_text_clip(
@@ -263,6 +268,7 @@ def main():
 
     composition = listio.read_map(args.inputfile)
     if not composition:
+        print('Exiting, no composition information found')
         sys.exit(1)
 
     all_clips = []
@@ -299,10 +305,6 @@ def main():
                 cut_end,
                 ext=args.video_ext,
                 params=params)
-            print('  OUTPUT "{}"'.format(clip_file_path))
-            if os.path.isfile(clip_file_path):
-                print('  SKIP output exists "{}"'.format(clip_file_path))
-                continue
 
         if file_path not in cache_video_clips:
             cache_video_clips[file_path] = VideoFileClip(file_path)
@@ -375,8 +377,6 @@ def main():
             ext=args.video_ext,
             codec=args.video_codec,
             ffmpeg_params=args.video_params)
-
-    sys.exit()
 
 
 if __name__ == '__main__':
