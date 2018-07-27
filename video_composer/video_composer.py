@@ -274,7 +274,7 @@ def main():
     render_kwargs = {
         'fps': args.video_fps,
         'codec': args.video_codec,
-        'ffmpeg_params': args.video_params,
+        'ffmpeg_params': ffmpeg_params,
     }
 
     composition = listio.read_map(args.inputfile, delimiter=args.csv_delimiter)
