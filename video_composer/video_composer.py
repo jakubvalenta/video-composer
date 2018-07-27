@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -22,34 +23,28 @@ DEFAULT_INTERTITLE_DURATION = 3
 
 TEXT_WIDTH_FACTOR = 0.8
 
+logger = logging.getLogger(__name__)
 
-def render(
-        clip,
-        file_path,
-        fps=None,
-        ext=None,
-        codec=None,
-        ffmpeg_params=None):
-    if fps is None:
-        fps = DEFAULT_FPS
-    if ext is None:
-        ext = DEFAULT_EXT
-    file_dir, _ = os.path.split(file_path)
-    if file_dir and not os.path.isdir(file_dir):
-        os.makedirs(file_dir)
-    if ffmpeg_params:
-        ffmpeg_params = ffmpeg_params.split(' ')
-    file_base, _ = os.path.splitext(file_path)
-    file_path = file_base + ext
-    if os.path.isfile(file_path):
-        print('Aborting rendering, output file exists "{}"'.format(file_path))
+
+def _ensure_dir(path):
+    path_dir, _ = os.path.split(path)
+    if path_dir and not os.path.isdir(path_dir):
+        os.makedirs(path_dir, exist_ok=True)
+
+
+def _change_path_ext(path, ext):
+    base, _ = os.path.splitext(path)
+    return base + ext
+
+
+def render(clip, path, ext, *args, **kwargs):
+    _ensure_dir(path)
+    out_path = _change_path_ext(path, ext)
+    if os.path.exists(out_path):
+        logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
         return False
-    print('  Rendering "{}"'.format(file_path))
-    clip.write_videofile(
-        file_path,
-        fps=fps,
-        codec=codec,
-        ffmpeg_params=ffmpeg_params)
+    logger.info(f'  Rendering to "{out_path}".')
+    clip.write_videofile(out_path, *args, **kwargs)
     return True
 
 
@@ -87,10 +82,8 @@ def format_clip_file_path(
         dir_name,
         cut_start,
         cut_end,
-        ext=None,
+        ext,
         params=None):
-    if ext is None:
-        ext = DEFAULT_EXT
     file_dir, file_basename = os.path.split(file_path)
     file_name, _ = os.path.splitext(file_basename)
     new_path_without_ext = os.path.join(file_dir, dir_name, file_name)
@@ -206,13 +199,15 @@ def main():
                         help='concat cut video clips')
     parser.add_argument('--video-fps', '-vf', dest='video_fps', type=int,
                         help='video fps, defaults to {}'
-                        .format(DEFAULT_FPS))
+                        .format(DEFAULT_FPS),
+                        default=DEFAULT_FPS)
     parser.add_argument('--video-ext', '-ve', dest='video_ext',
                         help='video file extension, defaults to {}'
-                        .format(DEFAULT_EXT))
+                        .format(DEFAULT_EXT),
+                        default=DEFAULT_EXT)
     parser.add_argument('--video-codec', '-vc', dest='video_codec',
                         help='video codec, defaults to not set, which means'
-                        ' that moviepy will chose the codec automatically')
+                        ' that moviepy will choose the codec automatically')
     parser.add_argument('--video-params', '-vp', dest='video_params',
                         help='additional parameters for FFmpeg,'
                         ' example: --video-params="-vf eq=gamma=1.5"')
@@ -264,9 +259,23 @@ def main():
     parser.add_argument('--fadeout', '-fd', dest='fadeout', type=int,
                         help='duration in milliseconds of a fadeout after each'
                         ' clip; defaults to 0 meaning no fadeout')
+    parser.add_argument('--csv-delimiter', '-cd', dest='csv_delimiter',
+                        help=('custom CSV delimiter; '
+                              f'defaults to "{DEFAULT_CSV_DELIMITER}"'),
+                        default=DEFAULT_CSV_DELIMITER)
     args = parser.parse_args()
 
     composition = listio.read_map(args.inputfile)
+    if args.video_params:
+        ffmpeg_params = args.video_params.split(' ')
+    else:
+        ffmpeg_params = []
+    render_kwargs = {
+        'fps': args.video_fps,
+        'codec': args.video_codec,
+        'ffmpeg_params': args.video_params,
+    }
+
     if not composition:
         print('Exiting, no composition information found')
         sys.exit(1)
@@ -281,11 +290,11 @@ def main():
 
         file_path = os.path.join(args.clipsdir, composition[0])
         print('CLIP {} "{}"'.format(i, file_path))
-        cut_start = parse_duration(composition[1])
-        cut_end = parse_duration(composition[2])
-        if not composition[1] or not composition[2]:
+        if len(composition) < 3 or not composition[1] or not composition[2]:
             print('  SKIP no cut defined')
             continue
+        cut_start = parse_duration(composition[1])
+        cut_end = parse_duration(composition[2])
         print('  CUT {} --> {}'.format(cut_start, cut_end))
 
         if composition[0] in DEBUG_SKIP:
@@ -363,20 +372,12 @@ def main():
             render(
                 composite_clip,
                 clip_file_path,
-                fps=args.video_fps,
-                ext=args.video_ext,
-                codec=args.video_codec,
-                ffmpeg_params=args.video_params)
+                args.video_ext,
+                **render_kwargs)
 
     if args.join:
         joined_clip = concatenate_videoclips(all_clips)
-        render(
-            joined_clip,
-            args.outputdir,
-            fps=args.video_fps,
-            ext=args.video_ext,
-            codec=args.video_codec,
-            ffmpeg_params=args.video_params)
+        render(joined_clip, args.outputdir, args.video_ext, **render_kwargs)
 
 
 if __name__ == '__main__':
