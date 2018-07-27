@@ -1,2 +1,2 @@
-listio==1.0.0
+listio==1.1.0
 moviepy==0.2.3.2
