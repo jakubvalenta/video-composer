@@ -9,20 +9,16 @@ logger = logging.getLogger(__name__)
 Resize = namedtuple('Resize', ['w', 'h', 'x', 'y'])
 
 
-def subtitle_generator(txt):
-    return TextClip(txt, font='Georgia-Regular', fontsize=24, color='white')
+def filter_subclip(video_clip, cut_start, cut_end):
+    if not cut_start or not cut_end:
+        return video_clip
+    return video_clip.subclip(cut_start, cut_end)
 
 
-def generate_text_clip(text, width, color, font, fontsize):
-    text_with_line_breaks = text.replace('|', '\n')
-    return TextClip(
-        text_with_line_breaks,
-        size=(width, None),
-        color=color,
-        font=font,
-        fontsize=fontsize,
-        method='caption',
-        align='center')
+def filter_set_fps(video_clip, fps):
+    if not fps:
+        return video_clip
+    return video_clip.set_fps(fps)
 
 
 def _calc_resize(current_width, current_height, width, height):
@@ -64,13 +60,29 @@ def filter_resize(video_clip, width, height):
     return video_clip
 
 
+def _subtitle_generator(txt):
+    return TextClip(txt, font='Georgia-Regular', fontsize=24, color='white')
+
+
 def filter_add_subtitles(video_clip, subtitles_path):
     if not subtitles_path:
         return video_clip
     subtitles_clip = SubtitlesClip(
         subtitles_path,
-        subtitle_generator)
+        _subtitle_generator)
     return CompositeVideoClip([video_clip, subtitles_clip])
+
+
+def _generate_text_clip(text, width, color, font, fontsize):
+    text_with_line_breaks = text.replace('|', '\n')
+    return TextClip(
+        text_with_line_breaks,
+        size=(width, None),
+        color=color,
+        font=font,
+        fontsize=fontsize,
+        method='caption',
+        align='center')
 
 
 def filter_add_intertitle(
@@ -84,7 +96,7 @@ def filter_add_intertitle(
         width,
         height,
         text_width_factor=0.8):
-    text_clip = generate_text_clip(
+    text_clip = _generate_text_clip(
         text,
         width * text_width_factor,
         color=color,

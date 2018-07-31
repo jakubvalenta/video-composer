@@ -5,10 +5,10 @@ import sys
 import listio
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
-from .filters import (filter_add_intertitle, filter_add_subtitles,
-                      filter_adjust_speed, filter_fadeout, filter_resize)
+from .filters import (DEBUG_SKIP, filter_add_intertitle, filter_add_subtitles,
+                      filter_adjust_speed, filter_fadeout, filter_resize,
+                      filter_set_fps, filter_subclip)
 
-DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
 
 DEFAULT_FPS = 24
@@ -77,6 +77,12 @@ def format_clip_file_path(
         end=format_duration(cut_end),
         params_str=params_str,
         ext=ext)
+
+
+def create_video_clip(file_path, cache_video_clips):
+    if file_path not in cache_video_clips:
+        cache_video_clips[file_path] = VideoFileClip(file_path)
+    return cache_video_clips[file_path]
 
 
 def main():
@@ -214,18 +220,14 @@ def main():
                 ext=args.video_ext,
                 params=params)
 
-        if file_path not in cache_video_clips:
-            cache_video_clips[file_path] = VideoFileClip(file_path)
-        video_clip = cache_video_clips[file_path]
-
-        if cut_start and cut_end:
-            video_sub_clip = video_clip.subclip(cut_start, cut_end)
-        else:
-            video_sub_clip = video_clip
-        if args.video_fps:
-            video_sub_clip = video_sub_clip.set_fps(args.video_fps)
-
-        composite_clip = video_sub_clip
+        composite_clip = create_video_clip(file_path, cache_video_clips)
+        composite_clip = filter_subclip(
+            composite_clip,
+            cut_start,
+            cut_end)
+        composite_clip = filter_set_fps(
+            composite_clip,
+            args.video_fps)
         composite_clip = filter_resize(
             composite_clip,
             args.resize_width,
