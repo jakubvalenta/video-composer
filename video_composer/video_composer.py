@@ -7,10 +7,11 @@ from functools import partial, reduce
 import listio
 from moviepy.editor import concatenate_videoclips
 
-from .filters import (DEBUG_SKIP, filter_add_intertitle, filter_add_subtitles,
+from .filters import (filter_add_intertitle, filter_add_subtitles,
                       filter_adjust_speed, filter_fadeout, filter_resize,
                       filter_set_fps, filter_subclip, load_video_clip)
 
+DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
 
 DEFAULT_FPS = 24
@@ -47,7 +48,7 @@ def render(video_clip, path, ext, *args, **kwargs):
         logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
         return False
     logger.info(f'Rendering to "{out_path}".')
-    video_clip.write_videofile(out_path, *args, **kwargs)
+    # video_clip.write_videofile(out_path, *args, **kwargs)
     return True
 
 
