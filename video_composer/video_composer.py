@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from collections import namedtuple
 
 import listio
 from moviepy.editor import (CompositeVideoClip, TextClip, VideoFileClip,
@@ -101,16 +102,12 @@ def format_clip_file_path(
         ext=ext)
 
 
-def filter_resize(video_clip, width, height):
-    current_width = video_clip.w
-    current_height = video_clip.h
+Resize = namedtuple('Resize', ['w', 'h', 'x', 'y'])
+
+
+def _calc_resize(current_width, current_height, width, height):
     current_aspect_ratio = current_width / current_height
     new_aspect_ratio = width / height
-
-    if current_width == width and current_height == height:
-        print('  RESIZING not necessary')
-        return video_clip
-
     clip_x = 0
     clip_y = 0
     if new_aspect_ratio > current_aspect_ratio:
@@ -124,24 +121,26 @@ def filter_resize(video_clip, width, height):
     else:
         new_width = width
         new_height = height
+    return Resize(new_width, new_height, clip_x, clip_y)
 
-    print('  RESIZING from {cw} x {ch} [{ca}] to {nw} x {nh} [{na}] '.format(
-        cw=current_width,
-        ch=current_height,
-        ca=current_aspect_ratio,
-        nw=new_width,
-        nh=new_height,
-        na=new_aspect_ratio))
-    video_clip = video_clip.resize((new_width, new_height))
 
-    if clip_x > 0 or clip_y > 0:
-        print('  CLIPPING frame position +{x}+{y}'.format(x=clip_x, y=clip_y))
+def filter_resize(video_clip, width, height):
+    if not width and not height:
+        return video_clip
+    if video_clip.w == width and video_clip.h == height:
+        logger.info('Resizing not necessary')
+        return video_clip
+    resize = _calc_resize(video_clip.w, video_clip.h, width, height)
+    logger.info(f'Resizing from {video_clip.w} x {video_clip.h} '
+                f'to {resize.w} x {resize.h}')
+    video_clip = video_clip.resize((resize.w, resize.h))
+    if resize.x > 0 or resize.y > 0:
+        logger.info(f'Cropping +{resize.x}+{resize.y}')
         video_clip = video_clip.crop(
-            x1=clip_x,
-            y1=clip_y,
+            x1=resize.x,
+            y1=resize.y,
             width=width,
             height=height)
-
     return video_clip
 
 
@@ -329,11 +328,10 @@ def main():
             video_sub_clip = video_sub_clip.set_fps(args.video_fps)
 
         composite_clip = video_sub_clip
-        if args.resize_width and args.resize_height:
-            composite_clip = filter_resize(
-                composite_clip,
-                args.resize_width,
-                args.resize_height)
+        composite_clip = filter_resize(
+            composite_clip,
+            args.resize_width,
+            args.resize_height)
         if args.subtitles:
             raise NotImplementedError
             # TODO: Figure out what subtitles path should be.
