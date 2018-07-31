@@ -47,12 +47,12 @@ def render(video_clip, path, ext, dry_run, video_params, **kwargs):
     if os.path.exists(out_path):
         logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
         return
-    logger.info(f'Rendering to "{out_path}".')
     if video_params:
         kwargs['ffmpeg_params'] = video_params.split(' ')
     if dry_run:
         logger.warn(f'Dry run write_videofile("{out_path}", **{kwargs})')
     else:
+        logger.info(f'Rendering write_videofile("{out_path}", **{kwargs})')
         video_clip.write_videofile(out_path, **kwargs)
 
 
@@ -145,9 +145,10 @@ def create_video_clips(clips, args):
                 width=intertitle_size_w,
                 height=intertitle_size_h),
             partial(filter_adjust_speed, factor=args.speed),
-            partial(filter_fadeout, duration=args.fadeout)
+            partial(filter_fadeout, duration=args.fadeout),
         ]
-        yield reduce(lambda acc, func: func(acc), filters, video_clip)
+        video_clip = reduce(lambda acc, func: func(acc), filters, video_clip)
+        yield clip, video_clip
 
 
 def main():
@@ -255,12 +256,13 @@ def main():
         args.clipsdir,
         delimiter=args.csv_delimiter,
         limit=args.limit)
-    video_clips = create_video_clips(clips, args)
+    clips_and_video_clips = create_video_clips(clips, args)
     if args.join:
+        _, video_clips = zip(*clips_and_video_clips)
         joined_clip = concatenate_videoclips(video_clips)
         render(joined_clip, args.outputdir, **render_kwargs)
     else:
-        for clip, video_clip in zip(clips, video_clips):
+        for clip, video_clip in clips_and_video_clips:
             params = []
             if args.intertitles:
                 params.append('i')
