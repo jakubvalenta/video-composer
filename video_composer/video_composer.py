@@ -40,14 +40,14 @@ def _change_path_ext(path, ext):
     return base + ext
 
 
-def render(clip, path, ext, *args, **kwargs):
+def render(video_clip, path, ext, *args, **kwargs):
     _ensure_dir(path)
     out_path = _change_path_ext(path, ext)
     if os.path.exists(out_path):
         logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
         return False
     logger.info(f'Rendering to "{out_path}".')
-    clip.write_videofile(out_path, *args, **kwargs)
+    video_clip.write_videofile(out_path, *args, **kwargs)
     return True
 
 
@@ -59,17 +59,15 @@ def format_duration(duration):
     return duration.replace(':', '_').replace('.', '_')
 
 
-def format_clip_file_path(clip, dir_name, ext, params=None):
-    file_dir, file_basename = os.path.split(clip.file_path)
-    file_name, _ = os.path.splitext(file_basename)
-    new_path_base = os.path.join(file_dir, dir_name, file_name)
+def format_clip_file_path(clip, dir_name, params=None):
+    new_path = os.path.join(dir_name, clip.file_path)
+    start_str = format_duration(clip.cut_start)
+    end_str = format_duration(clip.cut_end)
     if params:
         params_str = '+'.join([''] + params)
     else:
         params_str = ''
-    start_str = format_duration(clip.cut_start),
-    end_str = format_duration(clip.cut_end),
-    return f'{new_path_base}-{start_str}-{end_str}{params_str}{ext}'
+    return f'{new_path}-{start_str}-{end_str}{params_str}'
 
 
 def read_render_kwargs(fps, codec, params):
@@ -259,12 +257,11 @@ def main():
             params = []
             if args.intertitles:
                 params.append('i')
-            clip_file_path = format_clip_file_path(
+            clip_path = format_clip_file_path(
                 clip,
                 args.outputdir,
-                ext=args.video_ext,
                 params=params)
-            render(video_clip, clip_file_path, args.video_ext, **render_kwargs)
+            render(video_clip, clip_path, args.video_ext, **render_kwargs)
 
 
 if __name__ == '__main__':
