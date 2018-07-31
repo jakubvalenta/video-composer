@@ -94,6 +94,7 @@ def _generate_text_clip(text, width, color, font, fontsize):
 
 def filter_add_intertitle(
         video_clip,
+        intertitles,
         text,
         color,
         font,
@@ -103,6 +104,8 @@ def filter_add_intertitle(
         width,
         height,
         text_width_factor=0.8):
+    if not intertitles:
+        return video_clip
     text_clip = _generate_text_clip(
         text,
         width * text_width_factor,

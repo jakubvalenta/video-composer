@@ -41,15 +41,19 @@ def _change_path_ext(path, ext):
     return base + ext
 
 
-def render(video_clip, path, ext, *args, **kwargs):
+def render(video_clip, path, ext, dry_run, video_params, **kwargs):
     _ensure_dir(path)
     out_path = _change_path_ext(path, ext)
     if os.path.exists(out_path):
         logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
-        return False
+        return
     logger.info(f'Rendering to "{out_path}".')
-    # video_clip.write_videofile(out_path, *args, **kwargs)
-    return True
+    if video_params:
+        kwargs['ffmpeg_params'] = video_params.split(' ')
+    if dry_run:
+        logger.warn(f'Dry run write_videofile("{out_path}", **{kwargs})')
+    else:
+        video_clip.write_videofile(out_path, **kwargs)
 
 
 def parse_duration(duration):
@@ -61,26 +65,15 @@ def format_duration(duration):
 
 
 def format_clip_file_path(clip, dir_name, params=None):
-    new_path = os.path.join(dir_name, clip.file_path)
+    base_path, ext = os.path.splitext(clip.file_path)
+    new_path = os.path.join(dir_name, base_path)
     start_str = format_duration(clip.cut_start)
     end_str = format_duration(clip.cut_end)
     if params:
         params_str = '+'.join([''] + params)
     else:
         params_str = ''
-    return f'{new_path}-{start_str}-{end_str}{params_str}'
-
-
-def read_render_kwargs(fps, codec, params):
-    if params:
-        ffmpeg_params = params.split(' ')
-    else:
-        ffmpeg_params = []
-    return {
-        'fps': fps,
-        'codec': codec,
-        'ffmpeg_params': ffmpeg_params,
-    }
+    return f'{new_path}-{start_str}-{end_str}{params_str}{ext}'
 
 
 Clip = namedtuple(
@@ -88,8 +81,8 @@ Clip = namedtuple(
     ['file_path', 'cut_start', 'cut_end', 'text'])
 
 
-def read_clips(file_path, clips_dir, csv_delimiter, limit):
-    composition = listio.read_map(file_path, delimiter=csv_delimiter)
+def read_clips(file_path, clips_dir, delimiter, limit):
+    composition = listio.read_map(file_path, delimiter=delimiter)
     if not composition:
         logger.error('Exiting, no composition information found')
         sys.exit(1)
@@ -98,9 +91,9 @@ def read_clips(file_path, clips_dir, csv_delimiter, limit):
             logger.warn(f'Limit {limit} reached')
             break
         if len(line) < 3:
-            logger.error(f'Skipping, invalid composition line "{line}"')
+            logger.warn(f'Skipping, invalid composition line "{line}"')
             continue
-        raw_file_path, raw_cut_start, raw_cut_end = line
+        raw_file_path, raw_cut_start, raw_cut_end = line[:3]
         file_path = os.path.join(clips_dir, raw_file_path)
         logger.info(f'Clip {i} "{file_path}"')
         if raw_file_path in DEBUG_SKIP:
@@ -142,6 +135,7 @@ def create_video_clips(clips, args):
             partial(filter_add_subtitles, subtitles_path=args.subtitles),
             partial(
                 filter_add_intertitle,
+                intertitles=args.intertitles,
                 text=clip.text,
                 color=args.intertitle_color,
                 font=args.intertitle_font,
@@ -239,11 +233,23 @@ def main():
                         help=('custom CSV delimiter; '
                               f'defaults to "{DEFAULT_CSV_DELIMITER}"'),
                         default=DEFAULT_CSV_DELIMITER)
+    parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
+                        help='verbose output')
+    parser.add_argument('--dry-run', '-d', dest='dry_run', action='store_true',
+                        help='dry run')
     args = parser.parse_args()
-    render_kwargs = read_render_kwargs(
-        args.video_fps,
-        args.video_codec,
-        args.video_params)
+    if args.verbose:
+        logging.basicConfig(
+            stream=sys.stdout,
+            level=logging.INFO,
+            format='%(message)s')
+    render_kwargs = {
+        'ext': args.video_ext,
+        'dry_run': args.dry_run,
+        'video_params': args.video_params,
+        'fps': args.video_fps,
+        'codec': args.video_codec,
+    }
     clips = read_clips(
         args.inputfile,
         args.clipsdir,
@@ -252,7 +258,7 @@ def main():
     video_clips = create_video_clips(clips, args)
     if args.join:
         joined_clip = concatenate_videoclips(video_clips)
-        render(joined_clip, args.outputdir, args.video_ext, **render_kwargs)
+        render(joined_clip, args.outputdir, **render_kwargs)
     else:
         for clip, video_clip in zip(clips, video_clips):
             params = []
@@ -262,7 +268,7 @@ def main():
                 clip,
                 args.outputdir,
                 params=params)
-            render(video_clip, clip_path, args.video_ext, **render_kwargs)
+            render(video_clip, clip_path, **render_kwargs)
 
 
 if __name__ == '__main__':
