@@ -5,8 +5,8 @@ import sys
 import listio
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
-from .filters import (filter_add_intertitle, filter_adjust_speed,
-                      filter_fadeout, filter_resize)
+from .filters import (filter_add_intertitle, filter_add_subtitles,
+                      filter_adjust_speed, filter_fadeout, filter_resize)
 
 DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
@@ -230,12 +230,9 @@ def main():
             composite_clip,
             args.resize_width,
             args.resize_height)
-        if args.subtitles:
-            raise NotImplementedError
-            # TODO: Figure out what subtitles path should be.
-            # composite_clip = filter_add_subtitles(
-            #     composite_clip,
-            #     subtitles_path)
+        composite_clip = filter_add_subtitles(
+            composite_clip,
+            args.subtitles)
         if args.intertitles:
             text = composition[3]
             print('  INTERTITLE {}'.format(text))
@@ -255,14 +252,12 @@ def main():
                 args.intertitle_duration,
                 intertitle_size_w,
                 intertitle_size_h)
-        if args.speed:
-            composite_clip = filter_adjust_speed(
-                composite_clip,
-                args.speed)
-        if args.fadeout:
-            composite_clip = filter_fadeout(
-                composite_clip,
-                args.fadeout)
+        composite_clip = filter_adjust_speed(
+            composite_clip,
+            args.speed)
+        composite_clip = filter_fadeout(
+            composite_clip,
+            args.fadeout)
 
         if args.join:
             all_clips.append(composite_clip)

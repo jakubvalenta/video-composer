@@ -65,6 +65,8 @@ def filter_resize(video_clip, width, height):
 
 
 def filter_add_subtitles(video_clip, subtitles_path):
+    if not subtitles_path:
+        return video_clip
     subtitles_clip = SubtitlesClip(
         subtitles_path,
         subtitle_generator)
@@ -98,8 +100,12 @@ def filter_add_intertitle(
 
 
 def filter_fadeout(video_clip, duration):
+    if not duration:
+        return video_clip
     return video_clip.fadeout(duration/1000)
 
 
 def filter_adjust_speed(video_clip, factor):
+    if not factor:
+        return video_clip
     return video_clip.speedx(factor=factor)
