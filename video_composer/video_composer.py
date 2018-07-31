@@ -2,13 +2,14 @@ import logging
 import os
 import sys
 from collections import namedtuple
+from functools import partial, reduce
 
 import listio
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+from moviepy.editor import concatenate_videoclips
 
 from .filters import (DEBUG_SKIP, filter_add_intertitle, filter_add_subtitles,
                       filter_adjust_speed, filter_fadeout, filter_resize,
-                      filter_set_fps, filter_subclip)
+                      filter_set_fps, filter_subclip, load_video_clip)
 
 DEFAULT_LIMIT = -1
 
@@ -80,12 +81,6 @@ def format_clip_file_path(
         ext=ext)
 
 
-def create_video_clip(file_path, cache_video_clips):
-    if file_path not in cache_video_clips:
-        cache_video_clips[file_path] = VideoFileClip(file_path)
-    return cache_video_clips[file_path]
-
-
 def read_render_kwargs(fps, codec, params):
     if params:
         ffmpeg_params = params.split(' ')
@@ -136,6 +131,39 @@ def read_clips(file_path, clips_dir, csv_delimiter, limit):
         else:
             text = None
         yield Clip(file_path, cut_start, cut_end, text)
+
+
+def create_video_clips(clips, args):
+    for clip in clips:
+        video_clip = load_video_clip(clip.file_path)
+        if args.resize_width and args.resize_height:
+            intertitle_size_w = args.resize_width
+            intertitle_size_h = args.resize_height
+        else:
+            intertitle_size_w = video_clip.w
+            intertitle_size_h = video_clip.h
+        filters = [
+            partial(filter_subclip, start=clip.cut_start, end=clip.cut_end),
+            partial(filter_set_fps, fps=args.video_fps),
+            partial(
+                filter_resize,
+                width=args.resize_width,
+                height=args.resize_height),
+            partial(filter_add_subtitles, subtitles_path=args.subtitles),
+            partial(
+                filter_add_intertitle,
+                text=clip.text,
+                color=args.intertitle_color,
+                font=args.intertitle_font,
+                fontsize=args.intertitle_fontsize,
+                position=args.intertitle_position,
+                duration=args.intertitle_duration,
+                width=intertitle_size_w,
+                height=intertitle_size_h),
+            partial(filter_adjust_speed, factor=args.speed),
+            partial(filter_fadeout, duration=args.fadeout)
+        ]
+        yield reduce(lambda acc, func: func(acc), filters, video_clip)
 
 
 def main():
@@ -231,10 +259,12 @@ def main():
         args.clipsdir,
         delimiter=args.csv_delimiter,
         limit=args.limit)
-    all_clips = []
-    cache_video_clips = {}
-    for i, clip in clips:
-        if not args.join:
+    video_clips = create_video_clips(clips, args)
+    if args.join:
+        joined_clip = concatenate_videoclips(video_clips)
+        render(joined_clip, args.outputdir, args.video_ext, **render_kwargs)
+    else:
+        for clip, video_clip in zip(clips, video_clips):
             params = []
             if args.intertitles:
                 params.append('i')
@@ -245,58 +275,7 @@ def main():
                 clip.cut_end,
                 ext=args.video_ext,
                 params=params)
-
-        composite_clip = create_video_clip(clip.file_path, cache_video_clips)
-        composite_clip = filter_subclip(
-            composite_clip,
-            clip.cut_start,
-            clip.cut_end)
-        composite_clip = filter_set_fps(
-            composite_clip,
-            args.video_fps)
-        composite_clip = filter_resize(
-            composite_clip,
-            args.resize_width,
-            args.resize_height)
-        composite_clip = filter_add_subtitles(
-            composite_clip,
-            args.subtitles)
-        if args.intertitles:
-            if args.resize_width and args.resize_height:
-                intertitle_size_w = args.resize_width
-                intertitle_size_h = args.resize_height
-            else:
-                intertitle_size_w = composite_clip.w
-                intertitle_size_h = composite_clip.h
-            composite_clip = filter_add_intertitle(
-                composite_clip,
-                clip.text,
-                args.intertitle_color,
-                args.intertitle_font,
-                args.intertitle_fontsize,
-                args.intertitle_position,
-                args.intertitle_duration,
-                intertitle_size_w,
-                intertitle_size_h)
-        composite_clip = filter_adjust_speed(
-            composite_clip,
-            args.speed)
-        composite_clip = filter_fadeout(
-            composite_clip,
-            args.fadeout)
-
-        if args.join:
-            all_clips.append(composite_clip)
-        else:
-            render(
-                composite_clip,
-                clip_file_path,
-                args.video_ext,
-                **render_kwargs)
-
-    if args.join:
-        joined_clip = concatenate_videoclips(all_clips)
-        render(joined_clip, args.outputdir, args.video_ext, **render_kwargs)
+            render(video_clip, clip_file_path, args.video_ext, **render_kwargs)
 
 
 if __name__ == '__main__':

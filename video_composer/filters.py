@@ -1,7 +1,9 @@
 import logging
 from collections import namedtuple
+from functools import lru_cache
 
-from moviepy.editor import CompositeVideoClip, TextClip, concatenate_videoclips
+from moviepy.editor import (CompositeVideoClip, TextClip, VideoFileClip,
+                            concatenate_videoclips)
 from moviepy.video.tools.subtitles import SubtitlesClip
 
 logger = logging.getLogger(__name__)
@@ -9,10 +11,15 @@ logger = logging.getLogger(__name__)
 Resize = namedtuple('Resize', ['w', 'h', 'x', 'y'])
 
 
-def filter_subclip(video_clip, cut_start, cut_end):
-    if not cut_start or not cut_end:
+@lru_cache(maxsize=512)
+def load_video_clip(file_path):
+    return VideoFileClip(file_path)
+
+
+def filter_subclip(video_clip, start, end):
+    if not start or not end:
         return video_clip
-    return video_clip.subclip(cut_start, cut_end)
+    return video_clip.subclip(start, end)
 
 
 def filter_set_fps(video_clip, fps):
