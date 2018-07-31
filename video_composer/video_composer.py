@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from collections import namedtuple
 
 import listio
 from moviepy.editor import VideoFileClip, concatenate_videoclips
@@ -83,6 +84,58 @@ def create_video_clip(file_path, cache_video_clips):
     if file_path not in cache_video_clips:
         cache_video_clips[file_path] = VideoFileClip(file_path)
     return cache_video_clips[file_path]
+
+
+def read_render_kwargs(fps, codec, params):
+    if params:
+        ffmpeg_params = params.split(' ')
+    else:
+        ffmpeg_params = []
+    return {
+        'fps': fps,
+        'codec': codec,
+        'ffmpeg_params': ffmpeg_params,
+    }
+
+
+Clip = namedtuple(
+    'Clip',
+    ['file_path', 'cut_start', 'cut_end', 'text'])
+
+
+def read_clips(file_path, clips_dir, csv_delimiter, limit):
+    composition = listio.read_map(file_path, delimiter=csv_delimiter)
+    if not composition:
+        logger.error('Exiting, no composition information found')
+        sys.exit(1)
+    for i, line in enumerate(composition):
+        if i == limit:
+            logger.warn(f'Limit {limit} reached')
+            break
+        if len(line) < 3:
+            logger.error(f'Skipping, invalid composition line "{line}"')
+            continue
+        raw_file_path, raw_cut_start, raw_cut_end = line
+        file_path = os.path.join(clips_dir, raw_file_path)
+        logger.info(f'Clip {i} "{file_path}"')
+        if raw_file_path in DEBUG_SKIP:
+            logger.warn('Skipping, clip found in DEBUG_SKIP')
+            continue
+        if not os.path.isfile(file_path):
+            logger.warn('Skipping, file not found')
+            continue
+        if not raw_cut_start or not raw_cut_end:
+            logger.warn('Skipping, no cut defined')
+            continue
+        cut_start = parse_duration(raw_cut_start)
+        cut_end = parse_duration(raw_cut_end)
+        logger.info(f'Cut {cut_start} --> {cut_end}')
+        if len(line) > 3:
+            text = line[3]
+            logger.info(f'Text "{text}"')
+        else:
+            text = None
+        yield Clip(file_path, cut_start, cut_end, text)
 
 
 def main():
@@ -169,62 +222,35 @@ def main():
                               f'defaults to "{DEFAULT_CSV_DELIMITER}"'),
                         default=DEFAULT_CSV_DELIMITER)
     args = parser.parse_args()
-
-    if args.video_params:
-        ffmpeg_params = args.video_params.split(' ')
-    else:
-        ffmpeg_params = []
-    render_kwargs = {
-        'fps': args.video_fps,
-        'codec': args.video_codec,
-        'ffmpeg_params': ffmpeg_params,
-    }
-
-    composition = listio.read_map(args.inputfile, delimiter=args.csv_delimiter)
-    if not composition:
-        print('Exiting, no composition information found')
-        sys.exit(1)
-
+    render_kwargs = read_render_kwargs(
+        args.video_fps,
+        args.video_codec,
+        args.video_params)
+    clips = read_clips(
+        args.inputfile,
+        args.clipsdir,
+        delimiter=args.csv_delimiter,
+        limit=args.limit)
     all_clips = []
-
     cache_video_clips = {}
-    for i, composition in enumerate(composition):
-        if i == args.limit:
-            print('LIMIT {} HIT'.format(args.limit))
-            break
-
-        file_path = os.path.join(args.clipsdir, composition[0])
-        print('CLIP {} "{}"'.format(i, file_path))
-        if len(composition) < 3 or not composition[1] or not composition[2]:
-            print('  SKIP no cut defined')
-            continue
-        cut_start = parse_duration(composition[1])
-        cut_end = parse_duration(composition[2])
-        print('  CUT {} --> {}'.format(cut_start, cut_end))
-
-        if composition[0] in DEBUG_SKIP:
-            print('  SKIP clip found in DEBUG_SKIP list')
-            continue
-        if not os.path.isfile(file_path):
-            print('  SKIP file not found')
-            continue
+    for i, clip in clips:
         if not args.join:
             params = []
             if args.intertitles:
                 params.append('i')
             clip_file_path = format_clip_file_path(
-                file_path,
+                clip.file_path,
                 args.outputdir,
-                cut_start,
-                cut_end,
+                clip.cut_start,
+                clip.cut_end,
                 ext=args.video_ext,
                 params=params)
 
-        composite_clip = create_video_clip(file_path, cache_video_clips)
+        composite_clip = create_video_clip(clip.file_path, cache_video_clips)
         composite_clip = filter_subclip(
             composite_clip,
-            cut_start,
-            cut_end)
+            clip.cut_start,
+            clip.cut_end)
         composite_clip = filter_set_fps(
             composite_clip,
             args.video_fps)
@@ -236,8 +262,6 @@ def main():
             composite_clip,
             args.subtitles)
         if args.intertitles:
-            text = composition[3]
-            print('  INTERTITLE {}'.format(text))
             if args.resize_width and args.resize_height:
                 intertitle_size_w = args.resize_width
                 intertitle_size_h = args.resize_height
@@ -246,7 +270,7 @@ def main():
                 intertitle_size_h = composite_clip.h
             composite_clip = filter_add_intertitle(
                 composite_clip,
-                text,
+                clip.text,
                 args.intertitle_color,
                 args.intertitle_font,
                 args.intertitle_fontsize,
