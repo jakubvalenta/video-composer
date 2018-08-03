@@ -77,9 +77,7 @@ def create_video_clips(clips, args):
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description='TV Series Tools: Video'
-    )
+    parser = argparse.ArgumentParser(description='Video Composer')
     parser.add_argument('--input', '-i', dest='inputfile', required=True,
                         help='file path to a file containing info on how to'
                         ' cut the clips')
