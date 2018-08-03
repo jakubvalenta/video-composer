@@ -1,143 +1,59 @@
 import logging
-import os
-import re
 import sys
-from collections import namedtuple
 from functools import partial, reduce
 
-import listio
 from moviepy.editor import concatenate_videoclips
 
-from .filters import (filter_add_intertitle, filter_add_subtitles,
-                      filter_adjust_speed, filter_fadeout, filter_resize,
-                      filter_set_fps, filter_subclip, load_video_clip)
+import filters
+import reader
+import renderer
 
 DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
-
 DEFAULT_FPS = 24
 DEFAULT_EXT = '.mp4'
 DEFAULT_CLIP_DIR = 'clips'
-
 DEFAULT_TEXT_COLOR = 'white'
 DEFAULT_TEXT_FONT = 'Arial'
 DEFAULT_SUBTITLE_FONTSIZE = 36
 DEFAULT_INTERTITLE_FONTSIZE = 48
 DEFAULT_INTERTITLE_POSITION = 'center'
 DEFAULT_INTERTITLE_DURATION = 3
-
 DEFAULT_CSV_DELIMITER = ','
 
 logger = logging.getLogger(__name__)
 
 
-def _ensure_dir(path):
-    path_dir, _ = os.path.split(path)
-    if path_dir and not os.path.isdir(path_dir):
-        os.makedirs(path_dir, exist_ok=True)
-
-
-def _change_path_ext(path, ext):
-    base, _ = os.path.splitext(path)
-    return base + ext
-
-
-def render(video_clip, path, ext, dry_run, video_params, **kwargs):
-    _ensure_dir(path)
-    out_path = _change_path_ext(path, ext)
-    if os.path.exists(out_path):
-        logger.warn(f'Aborting rendering, output file "{out_path}" exists.')
-        return
-    if video_params:
-        kwargs['ffmpeg_params'] = video_params.split(' ')
-    if dry_run:
-        logger.warn(f'Dry run write_videofile("{out_path}", **{kwargs})')
-    else:
-        logger.info(f'Rendering write_videofile("{out_path}", **{kwargs})')
-        video_clip.write_videofile(out_path, **kwargs)
-
-
-def _parse_duration(duration):
-    return duration.replace(',', '.')
-
-
-def _format_duration(duration):
-    return duration.replace(':', '_').replace('.', '_')
-
-
-def _sanitize_path(s):
-    return re.sub(r'[\w\d]', s, '_')[:64]
-
-
-def format_clip_file_path(clip, dir_name, params=None, add_text=False):
-    base_path, ext = os.path.splitext(clip.file_path)
-    new_path = os.path.join(dir_name, base_path)
-    start = _format_duration(clip.cut_start)
-    end = _format_duration(clip.cut_end)
-    params_str = '+'.join([''] + params) if params else ''
-    text = '-' + _sanitize_path(clip.text) if add_text and clip.text else ''
-    return f'{new_path}-{start}-{end}{text}{params_str}{ext}'
-
-
-Clip = namedtuple(
-    'Clip',
-    ['file_path', 'cut_start', 'cut_end', 'text'])
-
-
-def read_clips(file_path, clips_dir, delimiter, limit):
-    composition = listio.read_map(file_path, delimiter=delimiter)
-    if not composition:
-        logger.error('Exiting, no composition information found')
-        sys.exit(1)
-    for i, line in enumerate(composition):
-        if i == limit:
-            logger.warn(f'Limit {limit} reached')
-            break
-        if len(line) < 3:
-            logger.warn(f'Skipping, invalid composition line "{line}"')
-            continue
-        raw_file_path, raw_cut_start, raw_cut_end = line[:3]
-        file_path = os.path.join(clips_dir, raw_file_path)
-        logger.info(f'Clip {i} "{file_path}"')
-        if raw_file_path in DEBUG_SKIP:
-            logger.warn('Skipping, clip found in DEBUG_SKIP')
-            continue
-        if not os.path.isfile(file_path):
-            logger.warn('Skipping, file not found')
-            continue
-        if not raw_cut_start or not raw_cut_end:
-            logger.warn('Skipping, no cut defined')
-            continue
-        cut_start = _parse_duration(raw_cut_start)
-        cut_end = _parse_duration(raw_cut_end)
-        logger.info(f'Cut {cut_start} --> {cut_end}')
-        if len(line) > 3:
-            text = line[3]
-            logger.info(f'Text "{text}"')
-        else:
-            text = None
-        yield Clip(file_path, cut_start, cut_end, text)
+def _call_all(funcs, val):
+    return reduce(lambda acc, func: func(acc), funcs, val)
 
 
 def create_video_clips(clips, args):
     for clip in clips:
-        video_clip = load_video_clip(clip.file_path)
+        video_clip = filters.load_video_clip(clip.file_path)
         if args.resize_width and args.resize_height:
             intertitle_size_w = args.resize_width
             intertitle_size_h = args.resize_height
         else:
             intertitle_size_w = video_clip.w
             intertitle_size_h = video_clip.h
-        filters = [
-            partial(filter_subclip, start=clip.cut_start, end=clip.cut_end),
-            partial(filter_set_fps, fps=args.video_fps),
+        funcs = [
             partial(
-                filter_resize,
+                filters.filter_subclip,
+                start=clip.cut_start,
+                end=clip.cut_end),
+            partial(
+                filters.filter_set_fps,
+                fps=args.video_fps),
+            partial(
+                filters.filter_resize,
                 width=args.resize_width,
                 height=args.resize_height),
-            partial(filter_add_subtitles, subtitles_path=args.subtitles),
             partial(
-                filter_add_intertitle,
+                filters.filter_add_subtitles,
+                subtitles_path=args.subtitles),
+            partial(
+                filters.filter_add_intertitle,
                 intertitles=args.intertitles,
                 text=clip.text,
                 color=args.intertitle_color,
@@ -147,10 +63,14 @@ def create_video_clips(clips, args):
                 duration=args.intertitle_duration,
                 width=intertitle_size_w,
                 height=intertitle_size_h),
-            partial(filter_adjust_speed, factor=args.speed),
-            partial(filter_fadeout, duration=args.fadeout),
+            partial(
+                filters.filter_adjust_speed,
+                factor=args.speed),
+            partial(
+                filters.filter_fadeout,
+                duration=args.fadeout),
         ]
-        video_clip = reduce(lambda acc, func: func(acc), filters, video_clip)
+        video_clip = _call_all(funcs, video_clip)
         yield clip, video_clip
 
 
@@ -258,27 +178,28 @@ def main():
         'fps': args.video_fps,
         'codec': args.video_codec,
     }
-    clips = read_clips(
+    clips = reader.read_clips(
         args.inputfile,
         args.clipsdir,
         delimiter=args.csv_delimiter,
-        limit=args.limit)
+        limit=args.limit,
+        skip=DEBUG_SKIP)
     clips_and_video_clips = create_video_clips(clips, args)
     if args.join:
         _, video_clips = zip(*clips_and_video_clips)
         joined_clip = concatenate_videoclips(video_clips)
-        render(joined_clip, args.outputdir, **render_kwargs)
+        renderer.render(joined_clip, args.outputdir, **render_kwargs)
     else:
         for clip, video_clip in clips_and_video_clips:
             params = []
             if args.intertitles:
                 params.append('i')
-            clip_path = format_clip_file_path(
+            clip_path = renderer.format_clip_file_path(
                 clip,
                 args.outputdir,
                 params=params,
                 add_text=args.filename_add_text)
-            render(video_clip, clip_path, **render_kwargs)
+            renderer.render(video_clip, clip_path, **render_kwargs)
 
 
 if __name__ == '__main__':
