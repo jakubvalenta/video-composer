@@ -3,10 +3,7 @@ import sys
 from functools import partial, reduce
 
 from moviepy.editor import concatenate_videoclips
-
-import filters
-import reader
-import renderer
+from video_composer import filters, reader, renderer
 
 DEBUG_SKIP = ()
 DEFAULT_LIMIT = -1
