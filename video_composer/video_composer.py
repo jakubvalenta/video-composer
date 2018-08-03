@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import sys
 from collections import namedtuple
 from functools import partial, reduce
@@ -56,24 +57,26 @@ def render(video_clip, path, ext, dry_run, video_params, **kwargs):
         video_clip.write_videofile(out_path, **kwargs)
 
 
-def parse_duration(duration):
+def _parse_duration(duration):
     return duration.replace(',', '.')
 
 
-def format_duration(duration):
+def _format_duration(duration):
     return duration.replace(':', '_').replace('.', '_')
 
 
-def format_clip_file_path(clip, dir_name, params=None):
+def _sanitize_path(s):
+    return re.sub(r'[\w\d]', s, '_')[:64]
+
+
+def format_clip_file_path(clip, dir_name, params=None, add_text=False):
     base_path, ext = os.path.splitext(clip.file_path)
     new_path = os.path.join(dir_name, base_path)
-    start_str = format_duration(clip.cut_start)
-    end_str = format_duration(clip.cut_end)
-    if params:
-        params_str = '+'.join([''] + params)
-    else:
-        params_str = ''
-    return f'{new_path}-{start_str}-{end_str}{params_str}{ext}'
+    start = _format_duration(clip.cut_start)
+    end = _format_duration(clip.cut_end)
+    params_str = '+'.join([''] + params) if params else ''
+    text = '-' + _sanitize_path(clip.text) if add_text and clip.text else ''
+    return f'{new_path}-{start}-{end}{text}{params_str}{ext}'
 
 
 Clip = namedtuple(
@@ -105,8 +108,8 @@ def read_clips(file_path, clips_dir, delimiter, limit):
         if not raw_cut_start or not raw_cut_end:
             logger.warn('Skipping, no cut defined')
             continue
-        cut_start = parse_duration(raw_cut_start)
-        cut_end = parse_duration(raw_cut_end)
+        cut_start = _parse_duration(raw_cut_start)
+        cut_end = _parse_duration(raw_cut_end)
         logger.info(f'Cut {cut_start} --> {cut_end}')
         if len(line) > 3:
             text = line[3]
@@ -234,6 +237,10 @@ def main():
                         help=('custom CSV delimiter; '
                               f'defaults to "{DEFAULT_CSV_DELIMITER}"'),
                         default=DEFAULT_CSV_DELIMITER)
+    parser.add_argument('--filename-add-text', '-nt', dest='filename_add_text',
+                        action='store_true',
+                        help=('when --join is not set, add clip text to the '
+                              'output filename of each clip'))
     parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
                         help='verbose output')
     parser.add_argument('--dry-run', '-d', dest='dry_run', action='store_true',
@@ -269,7 +276,8 @@ def main():
             clip_path = format_clip_file_path(
                 clip,
                 args.outputdir,
-                params=params)
+                params=params,
+                add_text=args.filename_add_text)
             render(video_clip, clip_path, **render_kwargs)
 
 
