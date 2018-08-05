@@ -28,7 +28,7 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Artistic Software',
         'License :: OSI Approved :: Apache Software License',
-        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.6',
     ],
 
     keywords='',
