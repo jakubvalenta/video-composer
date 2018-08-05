@@ -13,7 +13,7 @@ setup(
 
     version='1.1.0',
 
-    description='Video composer.',
+    description='Batch cut and compose video clips.',
     long_description=long_description,
 
     url='https://lab.saloun.cz/jakub/video-composer',
