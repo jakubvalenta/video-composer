@@ -1,6 +1,7 @@
 import logging
 import os.path
 import re
+from string import Template
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +25,24 @@ def _sanitize_path(s):
     return re.sub(r'[\w\d]', s, '_')[:64]
 
 
-def format_clip_file_path(clip, dir_name, params=None, add_text=False):
-    base_path, ext = os.path.splitext(clip.file_path)
-    new_path = os.path.join(dir_name, base_path)
+def format_clip_path(template_str, clip, output_path, clips_dir, params):
+    clip_path, clip_basename = os.path.split(clip.orig_path)
+    clip_file, ext = os.path.splitext(clip_basename)
     start = _format_duration(clip.cut_start)
     end = _format_duration(clip.cut_end)
+    text = '-' + _sanitize_path(clip.text)
     params_str = '+'.join([''] + params) if params else ''
-    text = '-' + _sanitize_path(clip.text) if add_text and clip.text else ''
-    return f'{new_path}-{start}-{end}{text}{params_str}{ext}'
+    s = Template(template_str)
+    return s.safe_substitute(
+        output_path=output_path,
+        clips_dir=clips_dir,
+        clip_path=clip_path,
+        clip_file=clip_file,
+        start=start,
+        end=end,
+        text=text,
+        params=params_str,
+        ext=ext)
 
 
 def render(video_clip, path, ext, dry_run, video_params, **kwargs):

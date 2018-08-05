@@ -9,15 +9,15 @@ logger = logging.getLogger(__name__)
 
 Clip = namedtuple(
     'Clip',
-    ['file_path', 'cut_start', 'cut_end', 'text'])
+    ['orig_path', 'full_path', 'cut_start', 'cut_end', 'text'])
 
 
 def _parse_duration(duration):
     return duration.replace(',', '.')
 
 
-def read_clips(file_path, clips_dir, delimiter, limit=-1, skip=()):
-    composition = listio.read_map(file_path, delimiter=delimiter)
+def read_clips(csv_path, clips_dir, delimiter, limit=-1, skip=()):
+    composition = listio.read_map(csv_path, delimiter=delimiter)
     if not composition:
         logger.error('Exiting, no composition information found')
         return None
@@ -28,13 +28,13 @@ def read_clips(file_path, clips_dir, delimiter, limit=-1, skip=()):
         if len(line) < 3:
             logger.warn(f'Skipping, invalid composition line "{line}"')
             continue
-        raw_file_path, raw_cut_start, raw_cut_end = line[:3]
-        file_path = os.path.join(clips_dir, raw_file_path)
-        logger.info(f'Clip {i} "{file_path}"')
-        if raw_file_path in skip:
+        orig_path, raw_cut_start, raw_cut_end = line[:3]
+        full_path = os.path.join(clips_dir, orig_path)
+        logger.info(f'Clip {i} "{orig_path}"')
+        if orig_path in skip:
             logger.warn('Skipping, clip found in the param `skip`')
             continue
-        if not os.path.isfile(file_path):
+        if not os.path.isfile(full_path):
             logger.warn('Skipping, file not found')
             continue
         if not raw_cut_start or not raw_cut_end:
@@ -48,4 +48,4 @@ def read_clips(file_path, clips_dir, delimiter, limit=-1, skip=()):
             logger.info(f'Text "{text}"')
         else:
             text = None
-        yield Clip(file_path, cut_start, cut_end, text)
+        yield Clip(orig_path, full_path, cut_start, cut_end, text)

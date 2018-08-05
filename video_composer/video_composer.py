@@ -17,6 +17,9 @@ DEFAULT_INTERTITLE_FONTSIZE = 48
 DEFAULT_INTERTITLE_POSITION = 'center'
 DEFAULT_INTERTITLE_DURATION = 3
 DEFAULT_CSV_DELIMITER = ','
+DEFAULT_CLIP_PATH_TEMPLATE = (
+    '${output_path}/${clips_dir}/${clip_path}/'
+    '${clip_file}-${start}-${end}${text}${params}${ext}')
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ def _call_all(funcs, val):
 
 def create_video_clips(clips, args):
     for clip in clips:
-        video_clip = filters.load_video_clip(clip.file_path)
+        video_clip = filters.load_video_clip(clip.full_path)
         if args.resize_width and args.resize_height:
             intertitle_size_w = args.resize_width
             intertitle_size_h = args.resize_height
@@ -75,15 +78,23 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Video Composer')
-    parser.add_argument('--input', '-i', dest='inputfile', required=True,
+    parser.add_argument('--input', '-i', dest='input_file', required=True,
                         help='file path to a file containing info on how to'
                         ' cut the clips')
-    parser.add_argument('--clips', '-c', dest='clipsdir', required=True,
+    parser.add_argument('--clips', '-c', dest='clips_dir', required=True,
                         help='clips video files location')
-    parser.add_argument('--output', '-o', dest='outputdir', required=True,
-                        help='directory name inside --clips directory in which'
-                        ' the cut clips will be rendered, or path to a single'
-                        ' output video file if --join is set')
+    parser.add_argument(
+        '--output', '-o',
+        dest='output_path', required=True,
+        help=('directory in which clips will be rendered when --join is false '
+              'or path to output video file when --join is true'))
+    parser.add_argument(
+        '--output-clip-path-template', '-of',
+        dest='output_clip_path_template',
+        help=('output path template of an individual clip; '
+              'applies only when --join is not set; '
+              f'defaults to {DEFAULT_CLIP_PATH_TEMPLATE}'),
+        default=DEFAULT_CLIP_PATH_TEMPLATE)
     parser.add_argument('--join', '-j', dest='join', action='store_true',
                         help='concat cut video clips')
     parser.add_argument('--video-fps', '-vf', dest='video_fps', type=int,
@@ -152,10 +163,6 @@ def main():
                         help=('custom CSV delimiter; '
                               f'defaults to "{DEFAULT_CSV_DELIMITER}"'),
                         default=DEFAULT_CSV_DELIMITER)
-    parser.add_argument('--filename-add-text', '-nt', dest='filename_add_text',
-                        action='store_true',
-                        help=('when --join is not set, add clip text to the '
-                              'output filename of each clip'))
     parser.add_argument('--verbose', '-v', dest='verbose', action='store_true',
                         help='verbose output')
     parser.add_argument('--dry-run', '-d', dest='dry_run', action='store_true',
@@ -174,8 +181,8 @@ def main():
         'codec': args.video_codec,
     }
     clips = reader.read_clips(
-        args.inputfile,
-        args.clipsdir,
+        args.input_file,
+        args.clips_dir,
         delimiter=args.csv_delimiter,
         limit=args.limit,
         skip=DEBUG_SKIP)
@@ -183,17 +190,18 @@ def main():
     if args.join:
         _, video_clips = zip(*clips_and_video_clips)
         joined_clip = concatenate_videoclips(video_clips)
-        renderer.render(joined_clip, args.outputdir, **render_kwargs)
+        renderer.render(joined_clip, args.output_path, **render_kwargs)
     else:
         for clip, video_clip in clips_and_video_clips:
             params = []
             if args.intertitles:
                 params.append('i')
-            clip_path = renderer.format_clip_file_path(
+            clip_path = renderer.format_clip_path(
+                args.output_clip_path_template,
                 clip,
-                args.outputdir,
-                params=params,
-                add_text=args.filename_add_text)
+                args.output_path,
+                args.clips_dir,
+                params)
             renderer.render(video_clip, clip_path, **render_kwargs)
 
 

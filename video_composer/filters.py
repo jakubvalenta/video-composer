@@ -12,8 +12,8 @@ Resize = namedtuple('Resize', ['w', 'h', 'x', 'y'])
 
 
 @lru_cache(maxsize=512)
-def load_video_clip(file_path):
-    return VideoFileClip(file_path)
+def load_video_clip(path):
+    return VideoFileClip(path)
 
 
 def filter_subclip(video_clip, start, end):
