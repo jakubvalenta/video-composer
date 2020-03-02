@@ -10,19 +10,13 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='video_composer',
-
-    version='1.0.1',
-
+    version='1.0.2',
     description='Video composer.',
     long_description=long_description,
-
     url='https://lab.saloun.cz/jakub/video-composer',
-
     author='Jakub Valenta',
     author_email='jakub@jakubvalenta.cz',
-
     license='Apache Software License',
-
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
@@ -30,15 +24,9 @@ setup(
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3',
     ],
-
     keywords='',
-
     packages=find_packages(),
-
-    install_requires=[
-        'moviepy',
-    ],
-
+    install_requires=['listio', 'moviepy'],
     entry_points={
         'console_scripts': [
             'video-composer=video_composer.video_composer:main',
