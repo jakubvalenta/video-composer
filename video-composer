@@ -1,5 +1,7 @@
-#!/usr/bin/env python
+#!/bin/bash
 
-import video_composer.video_composer
-if __name__ == '__main__':
-    video_composer.video_composer.main()
+project_dir=$(dirname "$(readlink -f "$0")")
+
+PIPENV_PIPFILE="$project_dir/Pipfile" \
+PYTHONPATH="$project_dir" \
+pipenv run python3 -m video_composer "$@"
