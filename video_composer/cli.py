@@ -257,6 +257,8 @@ def main():
             )
 
     metas = ClipMetas.from_csv(args.csv, limit=args.limit)
+    if args.clips:
+        metas.add_base_path(args.clips)
 
     composition = Composition.from_metas(
         metas,

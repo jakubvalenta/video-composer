@@ -85,6 +85,17 @@ $ ls output.mp4
 output.mp4
 ```
 
+If your source video files are in a different directory, use the option
+`--clips` to specify their location:
+
+``` shell
+$ pushd .. > /dev/null
+$ video-composer -v test/input.csv --join test/output2.mp4 --clips test  # byexample: +pass
+$ popd > /dev/null
+$ ls output2.mp4
+output2.mp4
+```
+
 ### Specifying video format
 
 Use the `--video-ext` option to set the file extension of the file. Video

@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import logging
 import re
@@ -96,3 +97,7 @@ class ClipMetas(list):
                 break
             metas.append(ClipMeta.from_row(row))
         return cls(metas)
+
+    def add_base_path(self, base_path: Path):
+        for i, meta in enumerate(self):
+            self[i] = dataclasses.replace(meta, path=base_path / meta.path)
