@@ -208,6 +208,9 @@ class Composition:
             )
 
     def render_joined(self, output_file_path: Path):
+        if not self.video_file_clips:
+            logger.warn('Nothing to do, the composition has no clips')
+            return
         self._render_video_file_clip(
             concatenate_videoclips(self.video_file_clips),
             output_file_path,
