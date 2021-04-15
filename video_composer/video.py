@@ -183,12 +183,20 @@ class Composition:
     def _render_video_file_clip(
         self, video_file_clip: VideoFileClip, output_file_path: Path
     ):
+        kwargs: dict[str, str] = {}
+        if (
+            self.codec == 'libx264'
+            or not self.codec
+            and output_file_path.suffix == '.mp4'
+        ):
+            kwargs['audio_codec'] = 'aac'
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
         video_file_clip.write_videofile(
             str(output_file_path),
             fps=self.fps,
             codec=self.codec,
             ffmpeg_params=self.ffmpeg_params,
+            **kwargs,
         )
 
     def render_split(self, output_dir_path: Path):
