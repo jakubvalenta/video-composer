@@ -6,7 +6,7 @@ from video_composer import __title__
 
 setup(
     name='video-composer',
-    version='2.0.1',
+    version='2.1.0',
     description=__title__,
     long_description=(Path(__file__).parent / 'README.md').read_text(),
     url='https://github.com/jakubvalenta/video-composer',
